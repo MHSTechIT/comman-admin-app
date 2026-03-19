@@ -14,6 +14,7 @@ export default function ChatbotPage() {
   const [documents, setDocuments] = useState([])
   const [leads, setLeads] = useState([])
   const [loading, setLoading] = useState(false)
+  const [apiError, setApiError] = useState(null)
   const [activeTab, setActiveTab] = useState('upload')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
@@ -25,31 +26,33 @@ export default function ChatbotPage() {
   const [linkTitle, setLinkTitle] = useState('')
   const [linkUrl, setLinkUrl] = useState('')
 
-  const fetchDocuments = async () => {
+  const fetchData = async () => {
+    setApiError(null)
     try {
-      const res = await fetch(`${API_BASE}/admin/documents`)
-      const data = await res.json()
-      setDocuments(data.documents || [])
+      const [docRes, leadsRes] = await Promise.all([
+        fetch(`${API_BASE}/admin/documents`),
+        fetch(`${API_BASE}/admin/leads`),
+      ])
+      if (!docRes.ok || !leadsRes.ok) {
+        throw new Error('API returned an error')
+      }
+      const docData = await docRes.json().catch(() => ({}))
+      const leadsData = await leadsRes.json().catch(() => ({}))
+      setDocuments(docData.documents || [])
+      setLeads(leadsData.leads || [])
     } catch (err) {
-      console.error('Error fetching documents:', err)
+      console.error('Error fetching Chatbot data:', err)
       setDocuments([])
+      setLeads([])
+      setApiError(err?.message || 'Cannot reach Chatbot API')
     }
   }
 
-  const fetchLeads = async () => {
-    try {
-      const res = await fetch(`${API_BASE}/admin/leads`)
-      const data = await res.json()
-      setLeads(data.leads || [])
-    } catch (err) {
-      console.error('Error fetching leads:', err)
-      setLeads([])
-    }
-  }
+  const fetchDocuments = fetchData
+  const fetchLeads = fetchData
 
   useEffect(() => {
-    fetchDocuments()
-    fetchLeads()
+    fetchData()
   }, [])
 
   const hasDateFilter = !!(dateFrom || dateTo)
@@ -180,6 +183,24 @@ export default function ChatbotPage() {
           Upload documents and links for AI training • View enrollment leads
         </p>
       </div>
+
+      {apiError && (
+        <div className="mb-6 p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400 text-sm">
+          <strong>Chatbot API not reachable.</strong> Documents and leads come from the backend.
+          <ul className="mt-2 list-disc list-inside text-dark-muted">
+            <li><strong>Local:</strong> Run <code className="bg-dark-bg px-1 rounded">cd chatbot-backend && python main.py</code> or <code className="bg-dark-bg px-1 rounded">uvicorn main:app --port 8003</code></li>
+            <li><strong>Deployed:</strong> Set <code className="bg-dark-bg px-1 rounded">VITE_CHATBOT_API_URL</code> in Vercel to your Render backend URL</li>
+          </ul>
+          <p className="mt-2 text-dark-muted">API URL: <code className="bg-dark-bg px-1 rounded">{API_BASE}</code></p>
+          <button
+            type="button"
+            onClick={fetchData}
+            className="mt-3 px-3 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 text-sm font-medium"
+          >
+            Retry
+          </button>
+        </div>
+      )}
 
       <div className="flex gap-2 mb-6">
         <button

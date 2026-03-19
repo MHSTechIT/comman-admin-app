@@ -1,0 +1,28 @@
+# Render Blueprint - https://render.com/docs/blueprint-spec
+# Deploy: Connect this repo at render.com and it will create services from this file
+# IMPORTANT: Add DB_CONNECTION and SUPABASE_KEY in Render Dashboard → chatbot-api → Environment
+# See RENDER_SETUP.md for where to get these values.
+
+services:
+  # Chatbot Backend API (Python FastAPI)
+  - type: web
+    name: chatbot-api
+    runtime: python
+    region: oregon
+
+    rootDir: chatbot-backend
+
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.0"
+      - key: SUPABASE_URL
+        value: "https://mktzrhqaxxclisxckmed.supabase.co"
+      - key: DB_CONNECTION
+        sync: false
+      - key: SUPABASE_KEY
+        sync: false
+      - key: CORS_ORIGINS
+        value: "*"

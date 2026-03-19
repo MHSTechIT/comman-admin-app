@@ -26,10 +26,23 @@ app = FastAPI(
     version="1.0.0"
 )
 
+# CORS: allow localhost (dev) + Vercel/Render production URLs
+# Set CORS_ORIGINS=* to allow all, or comma-separated list for specific origins
+_cors_origins = os.getenv("CORS_ORIGINS", "")
+if _cors_origins.strip() == "*":
+    _allow_origins = ["*"]
+    _allow_origin_regex = None
+    _allow_credentials = False
+else:
+    _allow_origins = [o.strip() for o in _cors_origins.split(",") if o.strip()]
+    _allow_origin_regex = r"https?://(localhost|127\.0\.0\.1|[\w-]+\.vercel\.app|[\w-]+\.onrender\.com)(:\d+)?"
+    _allow_credentials = True
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origin_regex=r"http://(localhost|127\.0\.0\.1)(:\d+)?",
-    allow_credentials=True,
+    allow_origins=_allow_origins if _allow_origins else None,
+    allow_origin_regex=None if _allow_origins else _allow_origin_regex,
+    allow_credentials=_allow_credentials,
     allow_methods=["*"],
     allow_headers=["*"],
     expose_headers=["*"],
