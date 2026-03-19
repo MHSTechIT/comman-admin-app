@@ -1,7 +1,16 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 
-const API_BASE = import.meta.env.VITE_CHATBOT_API_URL || 'http://localhost:8003'
+const STORAGE_KEY = 'chatbot_api_url'
+const DEFAULT_API = import.meta.env.VITE_CHATBOT_API_URL || 'http://localhost:8003'
+const getApiBase = () => {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY)
+    if (stored && stored.startsWith('http')) return stored.replace(/\/+$/, '')
+  } catch (_) {}
+  return DEFAULT_API.replace(/\/+$/, '')
+}
+const DEPLOY_URL = 'https://render.com/deploy?repo=https://github.com/MHSTechIT/comman-admin-app'
 
 const toLocalYmd = (d) => {
   if (!d) return ''
@@ -11,6 +20,8 @@ const toLocalYmd = (d) => {
 
 export default function ChatbotPage() {
   const navigate = useNavigate()
+  const [apiBase, setApiBase] = useState(getApiBase)
+  const [apiUrlInput, setApiUrlInput] = useState('')
   const [documents, setDocuments] = useState([])
   const [leads, setLeads] = useState([])
   const [loading, setLoading] = useState(false)
@@ -30,8 +41,8 @@ export default function ChatbotPage() {
     setApiError(null)
     try {
       const [docRes, leadsRes] = await Promise.all([
-        fetch(`${API_BASE}/admin/documents`),
-        fetch(`${API_BASE}/admin/leads`),
+        fetch(`${apiBase}/admin/documents`),
+        fetch(`${apiBase}/admin/leads`),
       ])
       if (!docRes.ok || !leadsRes.ok) {
         throw new Error('API returned an error')
@@ -53,7 +64,7 @@ export default function ChatbotPage() {
 
   useEffect(() => {
     fetchData()
-  }, [])
+  }, [apiBase])
 
   const hasDateFilter = !!(dateFrom || dateTo)
 
@@ -79,7 +90,7 @@ export default function ChatbotPage() {
     formData.append('file', file)
     formData.append('title', fileName)
     try {
-      const res = await fetch(`${API_BASE}/admin/upload`, {
+      const res = await fetch(`${apiBase}/admin/upload`, {
         method: 'POST',
         body: formData,
       })
@@ -106,7 +117,7 @@ export default function ChatbotPage() {
     }
     setLoading(true)
     try {
-      const res = await fetch(`${API_BASE}/admin/add-link`, {
+      const res = await fetch(`${apiBase}/admin/add-link`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ title: linkTitle, url: linkUrl }),
@@ -163,7 +174,7 @@ export default function ChatbotPage() {
   const deleteDocument = async (id) => {
     if (!confirm('Delete this document?')) return
     try {
-      const res = await fetch(`${API_BASE}/admin/documents/${id}`, { method: 'DELETE' })
+      const res = await fetch(`${apiBase}/admin/documents/${id}`, { method: 'DELETE' })
       if (res.ok) {
         alert('✅ Deleted')
         fetchDocuments()
@@ -188,14 +199,38 @@ export default function ChatbotPage() {
         <div className="mb-6 p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400 text-sm">
           <strong>Chatbot API not reachable.</strong> Documents and leads come from the backend.
           <ul className="mt-2 list-disc list-inside text-dark-muted">
-            <li><strong>Local:</strong> Run <code className="bg-dark-bg px-1 rounded">cd chatbot-backend && python main.py</code> or <code className="bg-dark-bg px-1 rounded">uvicorn main:app --port 8003</code></li>
-            <li><strong>Deployed:</strong> Set <code className="bg-dark-bg px-1 rounded">VITE_CHATBOT_API_URL</code> in Vercel to your Render backend URL</li>
+            <li><strong>Local:</strong> Run <code className="bg-dark-bg px-1 rounded">cd chatbot-backend && python main.py</code></li>
+            <li><strong>Deploy:</strong> <a href={DEPLOY_URL} target="_blank" rel="noopener noreferrer" className="text-accent-purpleLight hover:underline">Deploy to Render</a> (one‑click), then add <strong>DB_CONNECTION</strong> & <strong>SUPABASE_KEY</strong> in Render Dashboard</li>
+            <li><strong>Already deployed?</strong> Paste your Render URL below:</li>
           </ul>
-          <p className="mt-2 text-dark-muted">API URL: <code className="bg-dark-bg px-1 rounded">{API_BASE}</code></p>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <input
+              type="url"
+              value={apiUrlInput}
+              onChange={(e) => setApiUrlInput(e.target.value)}
+              placeholder="https://chatbot-api-xxxx.onrender.com"
+              className="flex-1 min-w-[200px] px-3 py-2 rounded-lg bg-dark-bg border border-dark-border text-white text-sm placeholder-dark-muted focus:outline-none focus:border-accent-purple"
+            />
+            <button
+              type="button"
+              onClick={() => {
+                const url = apiUrlInput.trim().replace(/\/+$/, '')
+                if (url && url.startsWith('http')) {
+                  localStorage.setItem(STORAGE_KEY, url)
+                  setApiBase(url)
+                  setApiUrlInput('')
+                }
+              }}
+              className="px-4 py-2 rounded-lg bg-accent-purple/80 hover:bg-accent-purple text-white text-sm font-medium"
+            >
+              Save & connect
+            </button>
+          </div>
+          <p className="mt-2 text-dark-muted">Current: <code className="bg-dark-bg px-1 rounded">{apiBase}</code></p>
           <button
             type="button"
             onClick={fetchData}
-            className="mt-3 px-3 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 text-sm font-medium"
+            className="mt-3 mr-2 px-3 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 text-sm font-medium"
           >
             Retry
           </button>
