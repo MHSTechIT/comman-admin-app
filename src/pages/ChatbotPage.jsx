@@ -2,7 +2,6 @@ import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabaseChatbot } from '../lib/supabaseClientChatbot'
 
-const API_BASE = (import.meta.env.VITE_CHATBOT_API_URL || 'http://localhost:8003').replace(/\/+$/, '')
 
 const toLocalYmd = (d) => {
   if (!d) return ''
@@ -51,16 +50,26 @@ export default function ChatbotPage() {
         )
       }
 
-      try {
-        const docRes = await fetch(`${API_BASE}/admin/documents`)
-        if (docRes.ok) {
-          const docData = await docRes.json().catch(() => ({}))
-          setDocuments(docData.documents || [])
-        } else {
-          setDocuments([])
-        }
-      } catch {
+      const { data: docsData, error: docsError } = await supabaseChatbot
+        .from('documents')
+        .select('id, title, type, file_name, storage_path, url, created_at')
+        .order('created_at', { ascending: false })
+
+      if (docsError) {
+        console.warn('Chatbot documents error:', docsError)
         setDocuments([])
+      } else {
+        setDocuments(
+          (docsData || []).map((d) => ({
+            id: d.id,
+            title: d.title,
+            type: d.type || 'document',
+            file_name: d.file_name,
+            storage_path: d.storage_path,
+            url: d.url,
+            uploaded_at: d.created_at,
+          }))
+        )
       }
     } catch (err) {
       console.error('Error fetching Chatbot data:', err)
@@ -98,22 +107,29 @@ export default function ChatbotPage() {
       return
     }
     setLoading(true)
-    const formData = new FormData()
-    formData.append('file', file)
-    formData.append('title', fileName)
     try {
-      const res = await fetch(`${API_BASE}/admin/upload`, {
-        method: 'POST',
-        body: formData,
-      })
-      if (res.ok) {
-        alert('✅ Document uploaded successfully')
-        setFile(null)
-        setFileName('')
-        fetchDocuments()
-      } else {
-        alert('❌ Upload failed')
+      const ext = file.name.split('.').pop() || 'bin'
+      const path = `${Date.now()}-${fileName.replace(/[^a-zA-Z0-9-_]/g, '_')}.${ext}`
+      const { error: uploadErr } = await supabaseChatbot.storage.from('chatbot-documents').upload(path, file, { upsert: false })
+      if (uploadErr) {
+        alert('❌ Upload failed: ' + uploadErr.message)
+        return
       }
+      const { error: insertErr } = await supabaseChatbot.from('documents').insert({
+        title: fileName.trim(),
+        type: 'document',
+        file_name: file.name,
+        storage_path: path,
+      })
+      if (insertErr) {
+        await supabaseChatbot.storage.from('chatbot-documents').remove([path])
+        alert('❌ Upload failed: ' + insertErr.message)
+        return
+      }
+      alert('✅ Document uploaded successfully')
+      setFile(null)
+      setFileName('')
+      fetchDocuments()
     } catch (err) {
       alert('Error uploading: ' + err.message)
     } finally {
@@ -129,19 +145,19 @@ export default function ChatbotPage() {
     }
     setLoading(true)
     try {
-      const res = await fetch(`${API_BASE}/admin/add-link`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: linkTitle, url: linkUrl }),
+      const { error } = await supabaseChatbot.from('documents').insert({
+        title: linkTitle.trim(),
+        type: 'link',
+        url: linkUrl.trim(),
       })
-      if (res.ok) {
-        alert('✅ Link added successfully')
-        setLinkTitle('')
-        setLinkUrl('')
-        fetchDocuments()
-      } else {
-        alert('❌ Failed to add link')
+      if (error) {
+        alert('❌ Failed to add link: ' + error.message)
+        return
       }
+      alert('✅ Link added successfully')
+      setLinkTitle('')
+      setLinkUrl('')
+      fetchDocuments()
     } catch (err) {
       alert('Error adding link: ' + err.message)
     } finally {
@@ -183,16 +199,19 @@ export default function ChatbotPage() {
     doExportLeads(leads)
   }
 
-  const deleteDocument = async (id) => {
+  const deleteDocument = async (doc) => {
     if (!confirm('Delete this document?')) return
     try {
-      const res = await fetch(`${API_BASE}/admin/documents/${id}`, { method: 'DELETE' })
-      if (res.ok) {
-        alert('✅ Deleted')
-        fetchDocuments()
-      } else {
-        alert('Delete failed')
+      if (doc.storage_path) {
+        await supabaseChatbot.storage.from('chatbot-documents').remove([doc.storage_path])
       }
+      const { error } = await supabaseChatbot.from('documents').delete().eq('id', doc.id)
+      if (error) {
+        alert('Delete failed: ' + error.message)
+        return
+      }
+      alert('✅ Deleted')
+      fetchDocuments()
     } catch (err) {
       alert('Error deleting: ' + err.message)
     }
@@ -317,7 +336,7 @@ export default function ChatbotPage() {
                         <span className="text-xl">{doc.type === 'document' ? '📄' : '🔗'}</span>
                         <div className="min-w-0">
                           <h3 className="font-semibold text-white truncate">{doc.title}</h3>
-                          {doc.url && (
+                          {doc.type === 'link' && doc.url && (
                             <a
                               href={doc.url}
                               target="_blank"
@@ -325,6 +344,16 @@ export default function ChatbotPage() {
                               className="text-sm text-accent-purpleLight truncate block hover:underline"
                             >
                               {doc.url}
+                            </a>
+                          )}
+                          {doc.type === 'document' && doc.storage_path && (
+                            <a
+                              href={supabaseChatbot.storage.from('chatbot-documents').getPublicUrl(doc.storage_path).data.publicUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-sm text-accent-purpleLight hover:underline"
+                            >
+                              Download
                             </a>
                           )}
                           {doc.file_name && <p className="text-sm text-dark-muted">{doc.file_name}</p>}
@@ -335,7 +364,7 @@ export default function ChatbotPage() {
                       </p>
                     </div>
                     <button
-                      onClick={() => deleteDocument(doc.id)}
+                      onClick={() => deleteDocument(doc)}
                       className="ml-4 px-4 py-2 bg-red-600/20 hover:bg-red-600/40 text-red-400 rounded-lg transition shrink-0"
                     >
                       🗑️ Delete
