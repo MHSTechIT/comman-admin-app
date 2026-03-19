@@ -1,16 +1,8 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { supabaseChatbot } from '../lib/supabaseClientChatbot'
 
-const STORAGE_KEY = 'chatbot_api_url'
-const DEFAULT_API = import.meta.env.VITE_CHATBOT_API_URL || 'http://localhost:8003'
-const getApiBase = () => {
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY)
-    if (stored && stored.startsWith('http')) return stored.replace(/\/+$/, '')
-  } catch (_) {}
-  return DEFAULT_API.replace(/\/+$/, '')
-}
-const DEPLOY_URL = 'https://render.com/deploy?repo=https://github.com/MHSTechIT/comman-admin-app'
+const API_BASE = (import.meta.env.VITE_CHATBOT_API_URL || 'http://localhost:8003').replace(/\/+$/, '')
 
 const toLocalYmd = (d) => {
   if (!d) return ''
@@ -20,12 +12,10 @@ const toLocalYmd = (d) => {
 
 export default function ChatbotPage() {
   const navigate = useNavigate()
-  const [apiBase, setApiBase] = useState(getApiBase)
-  const [apiUrlInput, setApiUrlInput] = useState('')
   const [documents, setDocuments] = useState([])
   const [leads, setLeads] = useState([])
   const [loading, setLoading] = useState(false)
-  const [apiError, setApiError] = useState(null)
+  const [dataLoading, setDataLoading] = useState(true)
   const [activeTab, setActiveTab] = useState('upload')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
@@ -38,24 +28,46 @@ export default function ChatbotPage() {
   const [linkUrl, setLinkUrl] = useState('')
 
   const fetchData = async () => {
-    setApiError(null)
+    setDataLoading(true)
     try {
-      const [docRes, leadsRes] = await Promise.all([
-        fetch(`${apiBase}/admin/documents`),
-        fetch(`${apiBase}/admin/leads`),
-      ])
-      if (!docRes.ok || !leadsRes.ok) {
-        throw new Error('API returned an error')
+      const { data: leadsData, error: leadsError } = await supabaseChatbot
+        .from('enrollments')
+        .select('id, name, phone, sugar_level, created_at')
+        .order('created_at', { ascending: false })
+        .limit(500)
+
+      if (leadsError) {
+        console.warn('Chatbot leads error:', leadsError)
+        setLeads([])
+      } else {
+        setLeads(
+          (leadsData || []).map((e) => ({
+            id: String(e.id),
+            name: e.name,
+            phone: e.phone,
+            sugar_level: e.sugar_level || '',
+            created_at: e.created_at,
+          }))
+        )
       }
-      const docData = await docRes.json().catch(() => ({}))
-      const leadsData = await leadsRes.json().catch(() => ({}))
-      setDocuments(docData.documents || [])
-      setLeads(leadsData.leads || [])
+
+      try {
+        const docRes = await fetch(`${API_BASE}/admin/documents`)
+        if (docRes.ok) {
+          const docData = await docRes.json().catch(() => ({}))
+          setDocuments(docData.documents || [])
+        } else {
+          setDocuments([])
+        }
+      } catch {
+        setDocuments([])
+      }
     } catch (err) {
       console.error('Error fetching Chatbot data:', err)
       setDocuments([])
       setLeads([])
-      setApiError(err?.message || 'Cannot reach Chatbot API')
+    } finally {
+      setDataLoading(false)
     }
   }
 
@@ -64,7 +76,7 @@ export default function ChatbotPage() {
 
   useEffect(() => {
     fetchData()
-  }, [apiBase])
+  }, [])
 
   const hasDateFilter = !!(dateFrom || dateTo)
 
@@ -90,7 +102,7 @@ export default function ChatbotPage() {
     formData.append('file', file)
     formData.append('title', fileName)
     try {
-      const res = await fetch(`${apiBase}/admin/upload`, {
+      const res = await fetch(`${API_BASE}/admin/upload`, {
         method: 'POST',
         body: formData,
       })
@@ -117,7 +129,7 @@ export default function ChatbotPage() {
     }
     setLoading(true)
     try {
-      const res = await fetch(`${apiBase}/admin/add-link`, {
+      const res = await fetch(`${API_BASE}/admin/add-link`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ title: linkTitle, url: linkUrl }),
@@ -174,7 +186,7 @@ export default function ChatbotPage() {
   const deleteDocument = async (id) => {
     if (!confirm('Delete this document?')) return
     try {
-      const res = await fetch(`${apiBase}/admin/documents/${id}`, { method: 'DELETE' })
+      const res = await fetch(`${API_BASE}/admin/documents/${id}`, { method: 'DELETE' })
       if (res.ok) {
         alert('✅ Deleted')
         fetchDocuments()
@@ -195,46 +207,8 @@ export default function ChatbotPage() {
         </p>
       </div>
 
-      {apiError && (
-        <div className="mb-6 p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400 text-sm">
-          <strong>Chatbot API not reachable.</strong> Documents and leads come from the backend.
-          <ul className="mt-2 list-disc list-inside text-dark-muted">
-            <li><strong>Local:</strong> Run <code className="bg-dark-bg px-1 rounded">cd chatbot-backend && python main.py</code></li>
-            <li><strong>Deploy:</strong> <a href={DEPLOY_URL} target="_blank" rel="noopener noreferrer" className="text-accent-purpleLight hover:underline">Deploy to Render</a> (one‑click), then add <strong>DB_CONNECTION</strong> & <strong>SUPABASE_KEY</strong> in Render Dashboard</li>
-            <li><strong>Already deployed?</strong> Paste your Render URL below:</li>
-          </ul>
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            <input
-              type="url"
-              value={apiUrlInput}
-              onChange={(e) => setApiUrlInput(e.target.value)}
-              placeholder="https://chatbot-api-xxxx.onrender.com"
-              className="flex-1 min-w-[200px] px-3 py-2 rounded-lg bg-dark-bg border border-dark-border text-white text-sm placeholder-dark-muted focus:outline-none focus:border-accent-purple"
-            />
-            <button
-              type="button"
-              onClick={() => {
-                const url = apiUrlInput.trim().replace(/\/+$/, '')
-                if (url && url.startsWith('http')) {
-                  localStorage.setItem(STORAGE_KEY, url)
-                  setApiBase(url)
-                  setApiUrlInput('')
-                }
-              }}
-              className="px-4 py-2 rounded-lg bg-accent-purple/80 hover:bg-accent-purple text-white text-sm font-medium"
-            >
-              Save & connect
-            </button>
-          </div>
-          <p className="mt-2 text-dark-muted">Current: <code className="bg-dark-bg px-1 rounded">{apiBase}</code></p>
-          <button
-            type="button"
-            onClick={fetchData}
-            className="mt-3 mr-2 px-3 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 text-sm font-medium"
-          >
-            Retry
-          </button>
-        </div>
+      {dataLoading && (
+        <p className="mb-4 text-dark-muted text-sm">Loading…</p>
       )}
 
       <div className="flex gap-2 mb-6">
