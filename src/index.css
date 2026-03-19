@@ -1,0 +1,12 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  @apply bg-dark-bg text-gray-100 antialiased;
+}
+
+/* Prevent click on dropdown/button from triggering row click */
+.stop-row-click {
+  pointer-events: auto;
+}
