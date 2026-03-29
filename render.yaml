@@ -1,17 +1,42 @@
 # Render Blueprint - https://render.com/docs/blueprint-spec
-# Deploy: Connect this repo at render.com and it will create services from this file
-# IMPORTANT: Add DB_CONNECTION and SUPABASE_KEY in Render Dashboard → chatbot-api → Environment
-# See RENDER_SETUP.md for where to get these values.
+# Deploy: Connect this repo at render.com → New → Blueprint
+# IMPORTANT: After deploy, set all sync:false env vars in Render Dashboard → each service → Environment
 
 services:
-  # Chatbot Backend API (Python FastAPI)
+  # ── Frontend Dashboard (React / Vite static site) ──────────────────────────
+  - type: static
+    name: admin-dashboard
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    pullRequestPreviewsEnabled: false
+
+    envVars:
+      - key: VITE_SUPABASE_URL
+        sync: false            # Set in Render Dashboard
+      - key: VITE_SUPABASE_SERVICE_KEY
+        sync: false
+      - key: VITE_SUPABASE_FI_APP_URL
+        sync: false
+      - key: VITE_SUPABASE_FI_APP_ANON_KEY
+        sync: false
+      - key: VITE_SUPABASE_CHATBOT_URL
+        sync: false
+      - key: VITE_SUPABASE_CHATBOT_ANON_KEY
+        sync: false
+      - key: VITE_CHATBOT_API_URL
+        sync: false            # Set to your chatbot-api Render URL after backend deploys
+
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+
+  # ── Chatbot Backend API (Python / FastAPI) ──────────────────────────────────
   - type: web
     name: chatbot-api
     runtime: python
     region: oregon
-
     rootDir: chatbot-backend
-
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
 
@@ -21,8 +46,8 @@ services:
       - key: SUPABASE_URL
         value: "https://mktzrhqaxxclisxckmed.supabase.co"
       - key: DB_CONNECTION
-        sync: false
+        sync: false            # PostgreSQL connection string from Supabase
       - key: SUPABASE_KEY
-        sync: false
+        sync: false            # Supabase anon/service key
       - key: CORS_ORIGINS
         value: "*"
