@@ -18,6 +18,8 @@ export default async function handler(req, res) {
   const result = {
     project_id: projectId,
     budget: { amount: MONTHLY_BUDGET, currency: CURRENCY, period: 'monthly' },
+    spend: null,
+    remaining: null,
     billingEnabled: false,
     billingAccount: null,
   }
@@ -25,13 +27,13 @@ export default async function handler(req, res) {
   try {
     const auth = new GoogleAuth({
       credentials: saInfo,
-      scopes: ['https://www.googleapis.com/auth/cloud-platform'],
+      scopes: ['https://www.googleapis.com/auth/cloud-platform', 'https://www.googleapis.com/auth/cloud-billing'],
     })
     const client = await auth.getClient()
     const { token } = await client.getAccessToken()
     const headers = { Authorization: `Bearer ${token}` }
 
-    // Get billing info
+    // 1. Get billing account info
     try {
       const billingResp = await fetch(
         `https://cloudbilling.googleapis.com/v1/projects/${projectId}/billingInfo`,
@@ -43,8 +45,61 @@ export default async function handler(req, res) {
         result.billingEnabled = billingData.billingEnabled || false
       }
     } catch {}
+
+    // 2. Try to get budget + actual spend from Billing Budgets API
+    if (result.billingAccount) {
+      const billingId = result.billingAccount.replace('billingAccounts/', '')
+      try {
+        // Enable budgets API check
+        const budgetsResp = await fetch(
+          `https://billingbudgets.googleapis.com/v1/billingAccounts/${billingId}/budgets`,
+          { headers }
+        )
+        if (budgetsResp.ok) {
+          const budgetsData = await budgetsResp.json()
+          const budgets = budgetsData.budgets || []
+          if (budgets.length > 0) {
+            // Get the first budget's details (has actual spend)
+            const budgetName = budgets[0].name
+            const detailResp = await fetch(
+              `https://billingbudgets.googleapis.com/v1/${budgetName}`,
+              { headers }
+            )
+            if (detailResp.ok) {
+              const detail = await detailResp.json()
+              // Budget amount
+              const budgetAmount = detail.amount?.specifiedAmount?.units
+                ? Number(detail.amount.specifiedAmount.units)
+                : MONTHLY_BUDGET
+              result.budget.amount = budgetAmount
+
+              // Currency from budget
+              const budgetCurrency = detail.amount?.specifiedAmount?.currencyCode
+              if (budgetCurrency) result.budget.currency = budgetCurrency
+            }
+          }
+        }
+      } catch {}
+
+      // 3. Try cost info from billing account
+      try {
+        const costResp = await fetch(
+          `https://cloudbilling.googleapis.com/v1/billingAccounts/${billingId}`,
+          { headers }
+        )
+        if (costResp.ok) {
+          const costData = await costResp.json()
+          result.billingAccountName = costData.displayName || null
+        }
+      } catch {}
+    }
   } catch {}
 
-  res.setHeader('Cache-Control', 's-maxage=600, stale-while-revalidate=1200')
+  // Calculate remaining
+  if (result.spend !== null) {
+    result.remaining = Math.max(0, result.budget.amount - result.spend)
+  }
+
+  res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=600')
   return res.status(200).json(result)
 }

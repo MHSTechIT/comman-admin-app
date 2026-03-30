@@ -5,7 +5,6 @@ import RiskBadge from '../components/RiskBadge'
 import HomeTestModal from '../components/HomeTestModal'
 import ExpertCallModal from '../components/ExpertCallModal'
 import UserDetailModal from '../components/UserDetailModal'
-import GcpCreditsWidget from '../components/GcpCreditsWidget'
 
 const PAGE_SIZE = 20
 const REFRESH_INTERVAL_MS = 30_000
@@ -250,7 +249,6 @@ export default function UsersPage() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          <GcpCreditsWidget />
           <button
             type="button"
             onClick={() => setFilterModalOpen(true)}
