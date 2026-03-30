@@ -1,15 +1,17 @@
 import { useState, useEffect, useRef } from 'react'
-import { Zap, X, RefreshCw, ExternalLink, CheckCircle } from 'lucide-react'
+import { Zap, X, RefreshCw, ExternalLink } from 'lucide-react'
 
 const GCP_METRICS_URL = '/api/gcp-metrics'
-const PROJECT_ID = 'gen-lang-client-0040808089'
-const BILLING_URL = `https://console.cloud.google.com/billing/linkedaccount?project=${PROJECT_ID}`
-const AI_STUDIO_URL = 'https://aistudio.google.com/apikey'
-const BUDGET_URL = `https://console.cloud.google.com/billing/budgets?project=${PROJECT_ID}`
+const GCP_BILLING = 'https://console.cloud.google.com/billing/linkedaccount?project=gen-lang-client-0040808089'
 
 let _cache = null
 let _cacheTime = 0
-const CACHE_TTL = 10 * 60 * 1000
+const CACHE_TTL = 5 * 60 * 1000
+
+function fmt(n) {
+  if (n == null) return '—'
+  return Number(n).toLocaleString('en-IN')
+}
 
 export default function GcpCreditsWidget() {
   const [open, setOpen] = useState(false)
@@ -40,7 +42,8 @@ export default function GcpCreditsWidget() {
   }, [open])
 
   const budget = data?.budget?.amount ?? 2000
-  const sym = (data?.budget?.currency || 'INR') === 'INR' ? '₹' : '$'
+  const currency = (data?.budget?.currency || 'INR').trim() === 'INR' ? '₹' : '$'
+  const geminiReqs = data?.usage?.gemini_requests ?? null
 
   return (
     <div className="relative" ref={panelRef}>
@@ -49,7 +52,10 @@ export default function GcpCreditsWidget() {
           ${open ? 'bg-green-500/20 border-green-500/40 text-green-300'
                  : 'bg-white/5 border-dark-border text-dark-muted hover:text-white hover:bg-white/10'}`}>
         <Zap className="w-3.5 h-3.5" />
-        <span>{sym}{budget.toLocaleString()} <span className="text-dark-muted">/ mo</span></span>
+        {geminiReqs !== null
+          ? <span><span className="text-white font-semibold">{fmt(geminiReqs)}</span> API calls</span>
+          : <span>{currency}{fmt(budget)} <span className="text-dark-muted">/ mo</span></span>
+        }
       </button>
 
       {open && (
@@ -82,21 +88,34 @@ export default function GcpCreditsWidget() {
               <>
                 {/* Budget */}
                 <div className="text-center py-2">
-                  <p className="text-3xl font-bold text-green-400">{sym}{budget.toLocaleString()}</p>
+                  <p className="text-3xl font-bold text-green-400">{currency}{fmt(budget)}</p>
                   <p className="text-xs text-dark-muted mt-1">monthly budget</p>
                 </div>
 
-                {/* Status */}
-                <div className="bg-white/5 border border-dark-border rounded-lg px-3 py-2.5 text-xs space-y-1.5">
-                  <div className="flex justify-between items-center">
+                {/* Gemini usage this month */}
+                {data.usage && (
+                  <div className="bg-white/5 border border-dark-border rounded-lg px-3 py-2.5 text-xs space-y-1.5">
+                    <p className="text-white font-medium">Usage this month</p>
+                    <div className="flex justify-between">
+                      <span className="text-dark-muted">Gemini API calls</span>
+                      <span className="text-white font-semibold">{fmt(data.usage.gemini_requests)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-dark-muted">Total API calls</span>
+                      <span className="text-white">{fmt(data.usage.total_requests)}</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Plan details */}
+                <div className="bg-white/5 border border-dark-border rounded-lg px-3 py-2.5 text-xs space-y-1">
+                  <div className="flex justify-between">
                     <span className="text-dark-muted">Billing</span>
-                    <span className="flex items-center gap-1 text-green-400">
-                      <CheckCircle className="w-3 h-3" /> Active
-                    </span>
+                    <span className="text-green-400">{data.billingEnabled ? '✓ Active' : '✗ Inactive'}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-dark-muted">Plan</span>
-                    <span className="text-white">Paid ({sym}{budget.toLocaleString()}/mo)</span>
+                    <span className="text-white">Paid ({currency}{fmt(budget)}/mo)</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-dark-muted">Project</span>
@@ -104,26 +123,20 @@ export default function GcpCreditsWidget() {
                   </div>
                 </div>
 
-                {/* Quick links */}
-                <div className="space-y-1.5">
-                  <a href={BUDGET_URL} target="_blank" rel="noopener noreferrer"
-                    className="flex items-center justify-between px-3 py-2 rounded-lg bg-green-500/10 border border-green-500/20 text-xs text-green-300 hover:bg-green-500/20 transition">
-                    <span>View Spend &amp; Remaining Balance</span>
-                    <ExternalLink className="w-3 h-3" />
-                  </a>
-                  <a href={AI_STUDIO_URL} target="_blank" rel="noopener noreferrer"
-                    className="flex items-center justify-between px-3 py-2 rounded-lg bg-blue-500/10 border border-blue-500/20 text-xs text-blue-300 hover:bg-blue-500/20 transition">
-                    <span>View API Key Usage (AI Studio)</span>
-                    <ExternalLink className="w-3 h-3" />
-                  </a>
-                  <a href={BILLING_URL} target="_blank" rel="noopener noreferrer"
-                    className="flex items-center justify-between px-3 py-2 rounded-lg bg-white/5 border border-dark-border text-xs text-dark-muted hover:text-white hover:bg-white/10 transition">
-                    <span>Billing Console</span>
-                    <ExternalLink className="w-3 h-3" />
-                  </a>
-                </div>
+                {/* View spend link */}
+                <a href={GCP_BILLING} target="_blank" rel="noopener noreferrer"
+                  className="flex items-center justify-between bg-green-500/10 border border-green-500/20 rounded-lg px-3 py-2.5 text-xs text-green-300 hover:bg-green-500/20 transition">
+                  <span>View Spend & Remaining Balance</span>
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </a>
               </>
             )}
+
+            <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer"
+              className="flex items-center justify-between bg-blue-500/10 border border-blue-500/20 rounded-lg px-3 py-2.5 text-xs text-blue-300 hover:bg-blue-500/20 transition">
+              <span>View API Key Usage (AI Studio)</span>
+              <ExternalLink className="w-3.5 h-3.5" />
+            </a>
           </div>
         </div>
       )}

@@ -22,6 +22,7 @@ export default async function handler(req, res) {
     remaining: null,
     billingEnabled: false,
     billingAccount: null,
+    usage: null,
   }
 
   try {
@@ -33,72 +34,75 @@ export default async function handler(req, res) {
     const { token } = await client.getAccessToken()
     const headers = { Authorization: `Bearer ${token}` }
 
-    // 1. Get billing account info
+    // 1. Get billing info
     try {
       const billingResp = await fetch(
-        `https://cloudbilling.googleapis.com/v1/projects/${projectId}/billingInfo`,
-        { headers }
+        `https://cloudbilling.googleapis.com/v1/projects/${projectId}/billingInfo`, { headers }
       )
       if (billingResp.ok) {
-        const billingData = await billingResp.json()
-        result.billingAccount = billingData.billingAccountName || null
-        result.billingEnabled = billingData.billingEnabled || false
+        const d = await billingResp.json()
+        result.billingAccount = d.billingAccountName || null
+        result.billingEnabled = d.billingEnabled || false
       }
     } catch {}
 
-    // 2. Try to get budget + actual spend from Billing Budgets API
-    if (result.billingAccount) {
-      const billingId = result.billingAccount.replace('billingAccounts/', '')
-      try {
-        // Enable budgets API check
-        const budgetsResp = await fetch(
-          `https://billingbudgets.googleapis.com/v1/billingAccounts/${billingId}/budgets`,
-          { headers }
-        )
-        if (budgetsResp.ok) {
-          const budgetsData = await budgetsResp.json()
-          const budgets = budgetsData.budgets || []
-          if (budgets.length > 0) {
-            // Get the first budget's details (has actual spend)
-            const budgetName = budgets[0].name
-            const detailResp = await fetch(
-              `https://billingbudgets.googleapis.com/v1/${budgetName}`,
-              { headers }
-            )
-            if (detailResp.ok) {
-              const detail = await detailResp.json()
-              // Budget amount
-              const budgetAmount = detail.amount?.specifiedAmount?.units
-                ? Number(detail.amount.specifiedAmount.units)
-                : MONTHLY_BUDGET
-              result.budget.amount = budgetAmount
+    // 2. Get this month's API request count from Cloud Monitoring
+    try {
+      const now = new Date()
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
 
-              // Currency from budget
-              const budgetCurrency = detail.amount?.specifiedAmount?.currencyCode
-              if (budgetCurrency) result.budget.currency = budgetCurrency
-            }
+      // Total requests by service this month
+      const params = new URLSearchParams({
+        filter: 'metric.type="serviceruntime.googleapis.com/api/request_count"',
+        'interval.startTime': startOfMonth,
+        'interval.endTime': now.toISOString(),
+        'aggregation.alignmentPeriod': '2592000s',
+        'aggregation.perSeriesAligner': 'ALIGN_SUM',
+        'aggregation.groupByFields': 'resource.labels.service',
+        'aggregation.crossSeriesReducer': 'REDUCE_SUM',
+      })
+
+      const monResp = await fetch(
+        `https://monitoring.googleapis.com/v3/projects/${projectId}/timeSeries?${params}`,
+        { headers }
+      )
+      if (monResp.ok) {
+        const monData = await monResp.json()
+        const usage = {}
+        let totalRequests = 0
+        for (const ts of monData.timeSeries || []) {
+          const service = ts.resource?.labels?.service || 'unknown'
+          let count = 0
+          for (const p of ts.points || []) {
+            count += Number(p.value?.int64Value || 0)
+          }
+          if (count > 0) {
+            usage[service] = count
+            totalRequests += count
           }
         }
-      } catch {}
+        result.usage = {
+          total_requests: totalRequests,
+          gemini_requests: usage['generativelanguage.googleapis.com'] || 0,
+          by_service: usage,
+        }
+      }
+    } catch {}
 
-      // 3. Try cost info from billing account
+    // 3. Get billing account display name
+    if (result.billingAccount) {
       try {
+        const billingId = result.billingAccount.replace('billingAccounts/', '')
         const costResp = await fetch(
-          `https://cloudbilling.googleapis.com/v1/billingAccounts/${billingId}`,
-          { headers }
+          `https://cloudbilling.googleapis.com/v1/billingAccounts/${billingId}`, { headers }
         )
         if (costResp.ok) {
-          const costData = await costResp.json()
-          result.billingAccountName = costData.displayName || null
+          const d = await costResp.json()
+          result.billingAccountName = d.displayName || null
         }
       } catch {}
     }
   } catch {}
-
-  // Calculate remaining
-  if (result.spend !== null) {
-    result.remaining = Math.max(0, result.budget.amount - result.spend)
-  }
 
   res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=600')
   return res.status(200).json(result)
