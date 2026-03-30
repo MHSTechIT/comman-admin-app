@@ -34,6 +34,15 @@ export default function DashboardLayout() {
       >
         <span>Chatbot</span>
       </NavLink>
+      <NavLink
+        to="/api-credits"
+        onClick={() => setMobileMenuOpen(false)}
+        className={({ isActive }) =>
+          `flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium ${isActive ? 'bg-accent-purple/20 text-accent-purpleLight' : 'text-dark-muted hover:text-white hover:bg-white/5'}`
+        }
+      >
+        <span>API Credits</span>
+      </NavLink>
     </>
   )
 

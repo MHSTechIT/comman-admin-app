@@ -9,6 +9,7 @@ import FiAppSleepPage from './pages/FiAppSleepPage'
 import FiAppReportPage from './pages/FiAppReportPage'
 import FiAppCoursePage from './pages/FiAppCoursePage'
 import ChatbotPage from './pages/ChatbotPage'
+import ApiCreditsPage from './pages/ApiCreditsPage'
 
 export default function App() {
   return (
@@ -24,6 +25,7 @@ export default function App() {
         <Route path="fi-app/:id/report" element={<FiAppReportPage />} />
         <Route path="fi-app/:id/course" element={<FiAppCoursePage />} />
         <Route path="chatbot" element={<ChatbotPage />} />
+        <Route path="api-credits" element={<ApiCreditsPage />} />
       </Route>
     </Routes>
   )
