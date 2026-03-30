@@ -43,10 +43,11 @@ export default async function handler(req, res) {
         result.billingAccount = billingData.billingAccountName || null
         result.billingEnabled = billingData.billingEnabled || false
       } else {
-        result.errors.push('billing_api_disabled')
+        const errBody = await billingResp.text()
+        result.errors.push(`billing_${billingResp.status}: ${errBody.slice(0, 200)}`)
       }
     } catch (e) {
-      result.errors.push('billing_api_error')
+      result.errors.push(`billing_error: ${e.message}`)
     }
 
     // 2. Try Cloud Monitoring API — get API request counts
@@ -79,12 +80,14 @@ export default async function handler(req, res) {
             }
           }
           metrics[metricType.split('/').pop()] = { total_24h: total }
+        } else if (Object.keys(metrics).length === 0) {
+          const errBody = await resp.text()
+          result.errors.push(`monitoring_${resp.status}: ${errBody.slice(0, 300)}`)
         }
       }
       if (Object.keys(metrics).length > 0) result.metrics = metrics
-      else result.errors.push('monitoring_api_disabled')
     } catch (e) {
-      result.errors.push('monitoring_api_error')
+      result.errors.push(`monitoring_error: ${e.message}`)
     }
   } catch (e) {
     result.errors.push(e.message)
