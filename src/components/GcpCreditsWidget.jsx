@@ -1,12 +1,15 @@
 import { useState, useEffect, useRef } from 'react'
-import { Zap, X, RefreshCw, ExternalLink } from 'lucide-react'
+import { Zap, X, RefreshCw, ExternalLink, CheckCircle } from 'lucide-react'
 
 const GCP_METRICS_URL = '/api/gcp-metrics'
-const GCP_BILLING = 'https://console.cloud.google.com/billing/linkedaccount?project=gen-lang-client-0040808089'
+const PROJECT_ID = 'gen-lang-client-0040808089'
+const BILLING_URL = `https://console.cloud.google.com/billing/linkedaccount?project=${PROJECT_ID}`
+const AI_STUDIO_URL = 'https://aistudio.google.com/apikey'
+const BUDGET_URL = `https://console.cloud.google.com/billing/budgets?project=${PROJECT_ID}`
 
 let _cache = null
 let _cacheTime = 0
-const CACHE_TTL = 5 * 60 * 1000
+const CACHE_TTL = 10 * 60 * 1000
 
 export default function GcpCreditsWidget() {
   const [open, setOpen] = useState(false)
@@ -37,9 +40,7 @@ export default function GcpCreditsWidget() {
   }, [open])
 
   const budget = data?.budget?.amount ?? 2000
-  const spend = data?.spend?.amount ?? null
-  const remaining = spend !== null ? budget - spend : null
-  const currency = (data?.budget?.currency || 'INR').trim() === 'INR' ? '₹' : '$'
+  const sym = (data?.budget?.currency || 'INR') === 'INR' ? '₹' : '$'
 
   return (
     <div className="relative" ref={panelRef}>
@@ -48,10 +49,7 @@ export default function GcpCreditsWidget() {
           ${open ? 'bg-green-500/20 border-green-500/40 text-green-300'
                  : 'bg-white/5 border-dark-border text-dark-muted hover:text-white hover:bg-white/10'}`}>
         <Zap className="w-3.5 h-3.5" />
-        {remaining !== null
-          ? <span><span className="text-white font-semibold">{currency}{remaining.toLocaleString()}</span> left</span>
-          : <span>{currency}{budget.toLocaleString()} <span className="text-dark-muted">/ mo</span></span>
-        }
+        <span>{sym}{budget.toLocaleString()} <span className="text-dark-muted">/ mo</span></span>
       </button>
 
       {open && (
@@ -82,85 +80,50 @@ export default function GcpCreditsWidget() {
 
             {data && (
               <>
-                {/* Balance display */}
+                {/* Budget */}
                 <div className="text-center py-2">
-                  {remaining !== null ? (
-                    <>
-                      <p className="text-3xl font-bold text-green-400">{currency}{remaining.toLocaleString()}</p>
-                      <p className="text-xs text-dark-muted mt-1">remaining this month</p>
-                    </>
-                  ) : (
-                    <>
-                      <p className="text-3xl font-bold text-green-400">{currency}{budget.toLocaleString()}</p>
-                      <p className="text-xs text-dark-muted mt-1">monthly budget</p>
-                    </>
-                  )}
+                  <p className="text-3xl font-bold text-green-400">{sym}{budget.toLocaleString()}</p>
+                  <p className="text-xs text-dark-muted mt-1">monthly budget</p>
                 </div>
 
-                {/* Spend + budget details */}
-                <div className="bg-white/5 border border-dark-border rounded-lg px-3 py-2.5 text-xs space-y-1">
-                  <div className="flex justify-between"><span className="text-dark-muted">Plan</span><span className="text-white">Paid</span></div>
-                  <div className="flex justify-between"><span className="text-dark-muted">Budget</span><span className="text-white">{currency}{budget.toLocaleString()} / month</span></div>
-                  {spend !== null && (
-                    <div className="flex justify-between"><span className="text-dark-muted">Spent</span><span className="text-yellow-400">{currency}{spend.toLocaleString()}</span></div>
-                  )}
-                  {remaining !== null && (
-                    <div className="flex justify-between"><span className="text-dark-muted">Remaining</span><span className="text-green-400 font-semibold">{currency}{remaining.toLocaleString()}</span></div>
-                  )}
-                  <div className="flex justify-between"><span className="text-dark-muted">Project</span><span className="text-white font-mono text-[10px]">{data.project_id}</span></div>
+                {/* Status */}
+                <div className="bg-white/5 border border-dark-border rounded-lg px-3 py-2.5 text-xs space-y-1.5">
+                  <div className="flex justify-between items-center">
+                    <span className="text-dark-muted">Billing</span>
+                    <span className="flex items-center gap-1 text-green-400">
+                      <CheckCircle className="w-3 h-3" /> Active
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-dark-muted">Plan</span>
+                    <span className="text-white">Paid ({sym}{budget.toLocaleString()}/mo)</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-dark-muted">Project</span>
+                    <span className="text-white font-mono text-[10px]">{data.project_id}</span>
+                  </div>
                 </div>
 
-                {/* Spend bar if data available */}
-                {spend !== null && (
-                  <div>
-                    <div className="w-full bg-white/10 rounded-full h-2">
-                      <div className="h-2 rounded-full transition-all duration-500"
-                        style={{
-                          width: `${Math.min(100, (spend / budget) * 100)}%`,
-                          backgroundColor: (spend / budget) > 0.9 ? '#f87171' : (spend / budget) > 0.66 ? '#fbbf24' : '#34d399'
-                        }} />
-                    </div>
-                    <p className="text-xs text-dark-muted mt-1">{((spend / budget) * 100).toFixed(1)}% used</p>
-                  </div>
-                )}
-
-                {/* API usage if available */}
-                {data.metrics && (
-                  <div className="bg-white/5 border border-dark-border rounded-lg px-3 py-2.5 text-xs space-y-1">
-                    <p className="text-white font-medium mb-1">Usage (24h)</p>
-                    <div className="flex justify-between">
-                      <span className="text-dark-muted">API Calls</span>
-                      <span className="text-white">{(data.metrics.generate_content_requests?.total_24h ?? 0).toLocaleString()}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-dark-muted">Input Tokens</span>
-                      <span className="text-white">{(data.metrics.generate_content_input_token_count?.total_24h ?? 0).toLocaleString()}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-dark-muted">Output Tokens</span>
-                      <span className="text-white">{(data.metrics.generate_content_output_token_count?.total_24h ?? 0).toLocaleString()}</span>
-                    </div>
-                  </div>
-                )}
-
-                {/* Enable APIs note */}
-                {data.errors?.length > 0 && (
-                  <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-lg px-3 py-2 text-xs text-yellow-300">
-                    <p className="font-medium mb-1">Enable APIs for live spend data:</p>
-                    <a href="https://console.cloud.google.com/apis/library/monitoring.googleapis.com?project=gen-lang-client-0040808089"
-                      target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline block">1. Enable Cloud Monitoring API</a>
-                    <a href="https://console.cloud.google.com/apis/library/cloudbilling.googleapis.com?project=gen-lang-client-0040808089"
-                      target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline block">2. Enable Cloud Billing API</a>
-                  </div>
-                )}
+                {/* Quick links */}
+                <div className="space-y-1.5">
+                  <a href={BUDGET_URL} target="_blank" rel="noopener noreferrer"
+                    className="flex items-center justify-between px-3 py-2 rounded-lg bg-green-500/10 border border-green-500/20 text-xs text-green-300 hover:bg-green-500/20 transition">
+                    <span>View Spend &amp; Remaining Balance</span>
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                  <a href={AI_STUDIO_URL} target="_blank" rel="noopener noreferrer"
+                    className="flex items-center justify-between px-3 py-2 rounded-lg bg-blue-500/10 border border-blue-500/20 text-xs text-blue-300 hover:bg-blue-500/20 transition">
+                    <span>View API Key Usage (AI Studio)</span>
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                  <a href={BILLING_URL} target="_blank" rel="noopener noreferrer"
+                    className="flex items-center justify-between px-3 py-2 rounded-lg bg-white/5 border border-dark-border text-xs text-dark-muted hover:text-white hover:bg-white/10 transition">
+                    <span>Billing Console</span>
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                </div>
               </>
             )}
-
-            {/* Billing console link */}
-            <a href={GCP_BILLING} target="_blank" rel="noopener noreferrer"
-              className="flex items-center gap-1.5 text-xs text-blue-400 hover:text-blue-300 transition pt-1">
-              <ExternalLink className="w-3 h-3" /> View real-time spend in GCP
-            </a>
           </div>
         </div>
       )}
