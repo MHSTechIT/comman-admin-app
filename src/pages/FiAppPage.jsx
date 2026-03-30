@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabaseFiApp } from '../lib/supabaseClientFiApp'
 import { Search, ChevronLeft, ChevronRight } from 'lucide-react'
+import GcpCreditsWidget from '../components/GcpCreditsWidget'
 
 export default function FiAppPage() {
   const navigate = useNavigate()
@@ -77,9 +78,12 @@ export default function FiAppPage() {
 
   return (
     <div className="p-8">
-      <div className="mb-8">
-        <h2 className="text-3xl font-bold text-white mb-2">Fi App - Users Sheet</h2>
-        <p className="text-dark-muted">Click any cell to view detailed information</p>
+      <div className="mb-8 flex items-start justify-between gap-4">
+        <div>
+          <h2 className="text-3xl font-bold text-white mb-2">Fi App - Users Sheet</h2>
+          <p className="text-dark-muted">Click any cell to view detailed information</p>
+        </div>
+        <GcpCreditsWidget />
       </div>
 
       {error && (

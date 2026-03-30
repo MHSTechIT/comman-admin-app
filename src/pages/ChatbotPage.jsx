@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabaseChatbot } from '../lib/supabaseClientChatbot'
+import GcpCreditsWidget from '../components/GcpCreditsWidget'
 
 
 const toLocalYmd = (d) => {
@@ -223,11 +224,14 @@ export default function ChatbotPage() {
 
   return (
     <div className="p-8">
-      <div className="mb-8">
+      <div className="mb-8 flex items-start justify-between gap-4">
+        <div>
         <h1 className="text-3xl font-bold text-white mb-2">Chatbot Admin</h1>
         <p className="text-dark-muted">
           Upload documents and links for AI training • View enrollment leads
         </p>
+        </div>
+        <GcpCreditsWidget />
       </div>
 
       {dataLoading && (
