@@ -8,6 +8,9 @@ langchain-postgres
 langchain-huggingface
 langchain-google-genai
 google-generativeai
+google-auth
+google-auth-httplib2
+httpx
 sentence-transformers
 psycopg[binary]
 pgvector
