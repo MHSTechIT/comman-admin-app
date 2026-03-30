@@ -14,6 +14,10 @@ export default defineConfig({
         target: 'http://localhost:5174',
         changeOrigin: true,
       },
+      '/api/gcp-metrics': {
+        target: 'https://comman-admin-app-main.vercel.app',
+        changeOrigin: true,
+      },
       '/api': {
         target: 'http://localhost:9000',
         changeOrigin: true,

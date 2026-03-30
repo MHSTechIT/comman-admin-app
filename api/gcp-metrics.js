@@ -1,7 +1,7 @@
 import { GoogleAuth } from 'google-auth-library'
 
 const MONTHLY_BUDGET = Number(process.env.GCP_MONTHLY_BUDGET || 2000)
-const CURRENCY = process.env.GCP_CURRENCY || 'INR'
+const CURRENCY = (process.env.GCP_CURRENCY || 'INR').trim()
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*')

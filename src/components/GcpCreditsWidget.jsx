@@ -37,7 +37,9 @@ export default function GcpCreditsWidget() {
   }, [open])
 
   const budget = data?.budget?.amount ?? 2000
-  const currency = data?.budget?.currency === 'INR' ? '₹' : '$'
+  const spend = data?.spend?.amount ?? null
+  const remaining = spend !== null ? budget - spend : null
+  const currency = (data?.budget?.currency || 'INR').trim() === 'INR' ? '₹' : '$'
 
   return (
     <div className="relative" ref={panelRef}>
@@ -46,7 +48,10 @@ export default function GcpCreditsWidget() {
           ${open ? 'bg-green-500/20 border-green-500/40 text-green-300'
                  : 'bg-white/5 border-dark-border text-dark-muted hover:text-white hover:bg-white/10'}`}>
         <Zap className="w-3.5 h-3.5" />
-        <span>{currency}{budget.toLocaleString()} <span className="text-dark-muted">/ mo</span></span>
+        {remaining !== null
+          ? <span><span className="text-white font-semibold">{currency}{remaining.toLocaleString()}</span> left</span>
+          : <span>{currency}{budget.toLocaleString()} <span className="text-dark-muted">/ mo</span></span>
+        }
       </button>
 
       {open && (
@@ -77,18 +82,47 @@ export default function GcpCreditsWidget() {
 
             {data && (
               <>
-                {/* Budget display */}
+                {/* Balance display */}
                 <div className="text-center py-2">
-                  <p className="text-3xl font-bold text-green-400">{currency}{budget.toLocaleString()}</p>
-                  <p className="text-xs text-dark-muted mt-1">monthly budget</p>
+                  {remaining !== null ? (
+                    <>
+                      <p className="text-3xl font-bold text-green-400">{currency}{remaining.toLocaleString()}</p>
+                      <p className="text-xs text-dark-muted mt-1">remaining this month</p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-3xl font-bold text-green-400">{currency}{budget.toLocaleString()}</p>
+                      <p className="text-xs text-dark-muted mt-1">monthly budget</p>
+                    </>
+                  )}
                 </div>
 
-                {/* Plan details */}
+                {/* Spend + budget details */}
                 <div className="bg-white/5 border border-dark-border rounded-lg px-3 py-2.5 text-xs space-y-1">
                   <div className="flex justify-between"><span className="text-dark-muted">Plan</span><span className="text-white">Paid</span></div>
                   <div className="flex justify-between"><span className="text-dark-muted">Budget</span><span className="text-white">{currency}{budget.toLocaleString()} / month</span></div>
+                  {spend !== null && (
+                    <div className="flex justify-between"><span className="text-dark-muted">Spent</span><span className="text-yellow-400">{currency}{spend.toLocaleString()}</span></div>
+                  )}
+                  {remaining !== null && (
+                    <div className="flex justify-between"><span className="text-dark-muted">Remaining</span><span className="text-green-400 font-semibold">{currency}{remaining.toLocaleString()}</span></div>
+                  )}
                   <div className="flex justify-between"><span className="text-dark-muted">Project</span><span className="text-white font-mono text-[10px]">{data.project_id}</span></div>
                 </div>
+
+                {/* Spend bar if data available */}
+                {spend !== null && (
+                  <div>
+                    <div className="w-full bg-white/10 rounded-full h-2">
+                      <div className="h-2 rounded-full transition-all duration-500"
+                        style={{
+                          width: `${Math.min(100, (spend / budget) * 100)}%`,
+                          backgroundColor: (spend / budget) > 0.9 ? '#f87171' : (spend / budget) > 0.66 ? '#fbbf24' : '#34d399'
+                        }} />
+                    </div>
+                    <p className="text-xs text-dark-muted mt-1">{((spend / budget) * 100).toFixed(1)}% used</p>
+                  </div>
+                )}
 
                 {/* API usage if available */}
                 {data.metrics && (
