@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { Zap, X, RefreshCw, ExternalLink } from 'lucide-react'
 
-const GCP_METRICS_URL = 'https://common-chatbot-api.onrender.com/gcp-metrics'
+const GCP_METRICS_URL = '/api/gcp-metrics'
 const GCP_CONSOLE = 'https://console.cloud.google.com/apis/api/generativelanguage.googleapis.com/quotas?project=gen-lang-client-0040808089'
 const DAILY_LIMIT = 1500
 
@@ -31,7 +31,7 @@ export default function GcpCreditsWidget() {
     setLoading(true)
     setError('')
     try {
-      const res = await fetch(GCP_METRICS_URL, { signal: AbortSignal.timeout(45000) })
+      const res = await fetch(GCP_METRICS_URL, { signal: AbortSignal.timeout(15000) })
       if (!res.ok) throw new Error(`Server error ${res.status}`)
       const json = await res.json()
       _cache = json
