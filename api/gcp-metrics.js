@@ -34,7 +34,6 @@ export default async function handler(req, res) {
         'https://www.googleapis.com/auth/cloud-platform',
         'https://www.googleapis.com/auth/cloud-billing',
         'https://www.googleapis.com/auth/bigquery.readonly',
-        'https://www.googleapis.com/auth/cloud-billing.budgets',
       ],
     })
     const client = await auth.getClient()
