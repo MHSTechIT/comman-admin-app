@@ -175,8 +175,14 @@ export default function GcpCreditsWidget() {
 
                 {/* BQ error */}
                 {data.bqError && (
-                  <div className="bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2 text-xs text-red-300">
-                    {data.bqError.includes('Not found') ? 'Billing export data not yet available — takes up to 24h.' : data.bqError}
+                  <div className={`border rounded-lg px-3 py-2 text-xs ${
+                    data.bqError.includes('24h') || data.bqError.includes('empty') || data.bqError.includes('Not found')
+                      ? 'bg-yellow-500/10 border-yellow-500/20 text-yellow-300'
+                      : 'bg-red-500/10 border-red-500/20 text-red-300'
+                  }`}>
+                    {data.bqError.includes('Not found') || data.bqError.includes('empty')
+                      ? 'Billing data not yet available — GCP exports once daily. Check back tomorrow.'
+                      : data.bqError}
                   </div>
                 )}
               </>

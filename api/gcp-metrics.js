@@ -79,30 +79,25 @@ export default async function handler(req, res) {
           FROM \`${projectId}.${BQ_DATASET}.${tableId}\`
           WHERE invoice.month = FORMAT_DATE('%Y%m', CURRENT_DATE())
         `
-        // Auto-detect dataset location (could be US, EU, asia-south1, etc.)
+        // Auto-detect dataset location
         let bqLocation = (process.env.GCP_BQ_LOCATION || '').trim()
-        let bqLocationSource = 'env'
         if (!bqLocation) {
           try {
             const [meta] = await bq.dataset(BQ_DATASET).getMetadata()
             bqLocation = meta.location || 'US'
-            bqLocationSource = 'dataset-meta'
-          } catch (metaErr) {
-            bqLocation = 'US'
-            bqLocationSource = 'fallback'
-            result.bqDebug = { metaError: metaErr.message, dataset: BQ_DATASET, tableId }
-          }
+          } catch { bqLocation = 'US' }
         }
-        result.bqLocationUsed = bqLocation
 
-        // Auto-detect actual table name from dataset (billing export table name varies)
+        // Auto-detect actual table name (find any gcp_billing_export_v1_ table)
         let resolvedTableId = tableId
         try {
           const [tables] = await bq.dataset(BQ_DATASET).getTables()
-          const tableIds = tables.map(t => t.id)
-          result.bqTablesFound = tableIds
-          const billingTable = tableIds.find(id => id.startsWith('gcp_billing_export_v1_'))
+          const billingTable = tables.map(t => t.id).find(id => id.startsWith('gcp_billing_export_v1_'))
           if (billingTable) resolvedTableId = billingTable
+          else if (tables.length === 0) {
+            result.bqError = 'Billing export dataset is empty — first data appears within 24h of setup'
+            return res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=600').status(200).json(result)
+          }
         } catch {}
 
         const resolvedQuery = `
