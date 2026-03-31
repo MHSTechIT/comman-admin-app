@@ -1,7 +1,9 @@
 import { GoogleAuth } from 'google-auth-library'
+import { BigQuery } from '@google-cloud/bigquery'
 
 const MONTHLY_BUDGET = Number(process.env.GCP_MONTHLY_BUDGET || 2000)
 const CURRENCY = (process.env.GCP_CURRENCY || 'INR').trim()
+const BQ_DATASET = (process.env.GCP_BQ_DATASET || 'billing_export').trim()
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*')
@@ -28,13 +30,18 @@ export default async function handler(req, res) {
   try {
     const auth = new GoogleAuth({
       credentials: saInfo,
-      scopes: ['https://www.googleapis.com/auth/cloud-platform', 'https://www.googleapis.com/auth/cloud-billing'],
+      scopes: [
+        'https://www.googleapis.com/auth/cloud-platform',
+        'https://www.googleapis.com/auth/cloud-billing',
+        'https://www.googleapis.com/auth/bigquery.readonly',
+      ],
     })
     const client = await auth.getClient()
     const { token } = await client.getAccessToken()
     const headers = { Authorization: `Bearer ${token}` }
 
     // 1. Get billing info
+    let billingId = null
     try {
       const billingResp = await fetch(
         `https://cloudbilling.googleapis.com/v1/projects/${projectId}/billingInfo`, { headers }
@@ -43,15 +50,51 @@ export default async function handler(req, res) {
         const d = await billingResp.json()
         result.billingAccount = d.billingAccountName || null
         result.billingEnabled = d.billingEnabled || false
+        billingId = (d.billingAccountName || '').replace('billingAccounts/', '')
       }
     } catch {}
 
-    // 2. Get this month's API request count from Cloud Monitoring
+    // 2. Get billing account display name
+    if (billingId) {
+      try {
+        const costResp = await fetch(
+          `https://cloudbilling.googleapis.com/v1/billingAccounts/${billingId}`, { headers }
+        )
+        if (costResp.ok) {
+          const d = await costResp.json()
+          result.billingAccountName = d.displayName || null
+        }
+      } catch {}
+    }
+
+    // 3. Query BigQuery billing export for current month's spend
+    if (billingId) {
+      try {
+        const bq = new BigQuery({ projectId, credentials: saInfo })
+        // Billing export table name uses billing account ID with dashes replaced by underscores
+        const tableId = `gcp_billing_export_v1_${billingId.replace(/-/g, '_')}`
+        const query = `
+          SELECT
+            SUM(cost) + SUM(IFNULL((SELECT SUM(c.amount) FROM UNNEST(credits) c), 0)) AS total_cost
+          FROM \`${projectId}.${BQ_DATASET}.${tableId}\`
+          WHERE invoice.month = FORMAT_DATE('%Y%m', CURRENT_DATE())
+        `
+        const [rows] = await bq.query({ query, location: 'US' })
+        if (rows && rows.length > 0 && rows[0].total_cost !== null) {
+          const spend = Math.round(Number(rows[0].total_cost) * 100) / 100
+          result.spend = spend
+          result.remaining = Math.round((MONTHLY_BUDGET - spend) * 100) / 100
+        }
+      } catch (e) {
+        result.bqError = e.message || 'BigQuery query failed'
+      }
+    }
+
+    // 4. Get this month's API request count from Cloud Monitoring
     try {
       const now = new Date()
       const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
 
-      // Total requests by service this month
       const params = new URLSearchParams({
         filter: 'metric.type="serviceruntime.googleapis.com/api/request_count"',
         'interval.startTime': startOfMonth,
@@ -88,20 +131,6 @@ export default async function handler(req, res) {
         }
       }
     } catch {}
-
-    // 3. Get billing account display name
-    if (result.billingAccount) {
-      try {
-        const billingId = result.billingAccount.replace('billingAccounts/', '')
-        const costResp = await fetch(
-          `https://cloudbilling.googleapis.com/v1/billingAccounts/${billingId}`, { headers }
-        )
-        if (costResp.ok) {
-          const d = await costResp.json()
-          result.billingAccountName = d.displayName || null
-        }
-      } catch {}
-    }
   } catch {}
 
   res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=600')
