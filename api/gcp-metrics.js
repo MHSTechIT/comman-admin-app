@@ -81,12 +81,19 @@ export default async function handler(req, res) {
         `
         // Auto-detect dataset location (could be US, EU, asia-south1, etc.)
         let bqLocation = (process.env.GCP_BQ_LOCATION || '').trim()
+        let bqLocationSource = 'env'
         if (!bqLocation) {
           try {
             const [meta] = await bq.dataset(BQ_DATASET).getMetadata()
             bqLocation = meta.location || 'US'
-          } catch { bqLocation = 'US' }
+            bqLocationSource = 'dataset-meta'
+          } catch (metaErr) {
+            bqLocation = 'US'
+            bqLocationSource = 'fallback'
+            result.bqDebug = { metaError: metaErr.message, dataset: BQ_DATASET, tableId }
+          }
         }
+        result.bqLocationUsed = bqLocation
         const [rows] = await bq.query({ query, location: bqLocation })
         if (rows && rows.length > 0 && rows[0].total_cost !== null) {
           const spend = Math.round(Number(rows[0].total_cost) * 100) / 100
