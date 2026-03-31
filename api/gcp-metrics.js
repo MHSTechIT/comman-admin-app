@@ -94,7 +94,24 @@ export default async function handler(req, res) {
           }
         }
         result.bqLocationUsed = bqLocation
-        const [rows] = await bq.query({ query, location: bqLocation })
+
+        // Auto-detect actual table name from dataset (billing export table name varies)
+        let resolvedTableId = tableId
+        try {
+          const [tables] = await bq.dataset(BQ_DATASET).getTables()
+          const tableIds = tables.map(t => t.id)
+          result.bqTablesFound = tableIds
+          const billingTable = tableIds.find(id => id.startsWith('gcp_billing_export_v1_'))
+          if (billingTable) resolvedTableId = billingTable
+        } catch {}
+
+        const resolvedQuery = `
+          SELECT
+            SUM(cost) + SUM(IFNULL((SELECT SUM(c.amount) FROM UNNEST(credits) c), 0)) AS total_cost
+          FROM \`${projectId}.${BQ_DATASET}.${resolvedTableId}\`
+          WHERE invoice.month = FORMAT_DATE('%Y%m', CURRENT_DATE())
+        `
+        const [rows] = await bq.query({ query: resolvedQuery, location: bqLocation })
         if (rows && rows.length > 0 && rows[0].total_cost !== null) {
           const spend = Math.round(Number(rows[0].total_cost) * 100) / 100
           result.spend = spend
