@@ -34,6 +34,7 @@ export default async function handler(req, res) {
         'https://www.googleapis.com/auth/cloud-platform',
         'https://www.googleapis.com/auth/cloud-billing',
         'https://www.googleapis.com/auth/bigquery.readonly',
+        'https://www.googleapis.com/auth/cloud-billing.budgets',
       ],
     })
     const client = await auth.getClient()
@@ -67,8 +68,31 @@ export default async function handler(req, res) {
       } catch {}
     }
 
-    // 3. Query BigQuery billing export for current month's spend
+    // 3. Try Billing Budgets API for current spend (fastest path)
     if (billingId) {
+      try {
+        const budgetResp = await fetch(
+          `https://billingbudgets.googleapis.com/v1/billingAccounts/${billingId}/budgets`,
+          { headers }
+        )
+        if (budgetResp.ok) {
+          const budgetData = await budgetResp.json()
+          for (const b of budgetData.budgets || []) {
+            if (b.currentSpend) {
+              const units = Number(b.currentSpend.units || 0)
+              const nanos = Number(b.currentSpend.nanos || 0)
+              const spend = Math.round((units + nanos / 1e9) * 100) / 100
+              result.spend = spend
+              result.remaining = Math.round((MONTHLY_BUDGET - spend) * 100) / 100
+              break
+            }
+          }
+        }
+      } catch {}
+    }
+
+    // 4. Query BigQuery billing export for current month's spend (if Budget API had no spend data)
+    if (billingId && result.spend === null) {
       try {
         const bq = new BigQuery({ projectId, credentials: saInfo })
         // Billing export table name uses billing account ID with dashes replaced by underscores
