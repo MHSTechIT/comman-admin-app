@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { supabaseFiApp } from '../lib/supabaseClientFiApp'
+import { fiAppApiUrl } from '../lib/supabaseClientFiApp'
 import { Search, ChevronLeft, ChevronRight } from 'lucide-react'
 import GcpCreditsWidget from '../components/GcpCreditsWidget'
 
@@ -22,40 +22,13 @@ export default function FiAppPage() {
     setLoading(true)
     setError(null)
     try {
-      const tablesToTry = ['profiles_public', 'profiles']
-      const from = (page - 1) * pageSize
-      const to = from + pageSize - 1
-      let data = []
-      let count = 0
-      let lastError = null
-
-      for (const tableName of tablesToTry) {
-        let q = supabaseFiApp.from(tableName).select('*', { count: 'exact' })
-        if (search.trim()) {
-          q = q.or(`name.ilike.%${search}%,email.ilike.%${search}%,phone.ilike.%${search}%`)
-        }
-        const res = await q.order('created_at', { ascending: false }).range(from, to)
-        if (res.error) {
-          const fallback = await supabaseFiApp.from(tableName).select('*', { count: 'exact' }).range(from, to)
-          if (!fallback.error) {
-            data = fallback.data || []
-            count = fallback.count ?? data.length
-            lastError = null
-            break
-          }
-          lastError = res.error
-          continue
-        }
-        data = res.data || []
-        count = res.count ?? data.length
-        lastError = null
-        break
-      }
-
-      if (lastError) throw lastError
-
-      setUsers(data)
-      setTotalPages(Math.max(1, Math.ceil((count || 0) / pageSize)))
+      const params = new URLSearchParams({ page, page_size: pageSize })
+      if (search.trim()) params.set('search', search.trim())
+      const res = await fetch(`${fiAppApiUrl}/api/users?${params}`)
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const json = await res.json()
+      setUsers(json.data || [])
+      setTotalPages(Math.max(1, Math.ceil((json.total || 0) / pageSize)))
     } catch (err) {
       setUsers([])
       setTotalPages(1)
@@ -119,7 +92,7 @@ export default function FiAppPage() {
           <div className="flex flex-col items-center justify-center h-64 text-center px-6">
             <p className="text-dark-muted mb-2">No users found</p>
             <p className="text-dark-muted/80 text-sm max-w-md">
-              If you expect data here, check in Supabase: (1) Tables <code className="text-accent-purple">profiles</code> or <code className="text-accent-purple">profiles_public</code> have rows, and (2) Row Level Security allows <code className="text-accent-purple">SELECT</code> for the anon role.
+              Check that the fi-app backend is running at <code className="text-accent-purple">{fiAppApiUrl}</code> and the <code className="text-accent-purple">AI_FI</code> database has data.
             </p>
           </div>
         ) : (
@@ -140,39 +113,30 @@ export default function FiAppPage() {
                     const userId = user.id || user.user_id
                     return (
                     <tr key={userId} className="border-b border-dark-border hover:bg-dark-bg/50 transition">
-                      {/* Name */}
                       <td
                         onClick={() => handleCellClick(userId, 'name')}
                         className="px-6 py-4 text-sm font-medium text-accent-purple cursor-pointer hover:text-accent-purpleLight hover:underline transition"
                       >
                         {user.name || '-'}
                       </td>
-
-                      {/* Food */}
                       <td
                         onClick={() => handleCellClick(userId, 'food')}
                         className="px-6 py-4 text-sm text-accent-purple cursor-pointer hover:text-accent-purpleLight hover:underline transition"
                       >
                         View Food
                       </td>
-
-                      {/* Drink */}
                       <td
                         onClick={() => handleCellClick(userId, 'drink')}
                         className="px-6 py-4 text-sm text-accent-purple cursor-pointer hover:text-accent-purpleLight hover:underline transition"
                       >
                         View Drink
                       </td>
-
-                      {/* Sleep */}
                       <td
                         onClick={() => handleCellClick(userId, 'sleep')}
                         className="px-6 py-4 text-sm text-accent-purple cursor-pointer hover:text-accent-purpleLight hover:underline transition"
                       >
                         View Sleep
                       </td>
-
-                      {/* Course */}
                       <td
                         onClick={() => handleCellClick(userId, 'course')}
                         className="px-6 py-4 text-sm text-accent-purple cursor-pointer hover:text-accent-purpleLight hover:underline transition"

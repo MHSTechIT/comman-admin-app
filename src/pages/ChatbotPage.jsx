@@ -1,8 +1,8 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { supabaseChatbot } from '../lib/supabaseClientChatbot'
 import GcpCreditsWidget from '../components/GcpCreditsWidget'
 
+const API_URL = import.meta.env.VITE_CHATBOT_API_URL || 'http://localhost:8003'
 
 const toLocalYmd = (d) => {
   if (!d) return ''
@@ -30,18 +30,15 @@ export default function ChatbotPage() {
   const fetchData = async () => {
     setDataLoading(true)
     try {
-      const { data: leadsData, error: leadsError } = await supabaseChatbot
-        .from('enrollments')
-        .select('id, name, phone, age, location, sugar_level, created_at')
-        .order('created_at', { ascending: false })
-        .limit(500)
+      const [leadsRes, docsRes] = await Promise.all([
+        fetch(`${API_URL}/admin/leads`),
+        fetch(`${API_URL}/admin/documents`),
+      ])
 
-      if (leadsError) {
-        console.warn('Chatbot leads error:', leadsError)
-        setLeads([])
-      } else {
+      if (leadsRes.ok) {
+        const json = await leadsRes.json()
         setLeads(
-          (leadsData || []).map((e) => ({
+          (json.leads || []).map((e) => ({
             id: String(e.id),
             name: e.name,
             phone: e.phone,
@@ -51,28 +48,26 @@ export default function ChatbotPage() {
             created_at: e.created_at,
           }))
         )
+      } else {
+        console.warn('Chatbot leads error:', leadsRes.status)
+        setLeads([])
       }
 
-      const { data: docsData, error: docsError } = await supabaseChatbot
-        .from('documents')
-        .select('id, title, type, file_name, storage_path, url, created_at')
-        .order('created_at', { ascending: false })
-
-      if (docsError) {
-        console.warn('Chatbot documents error:', docsError)
-        setDocuments([])
-      } else {
+      if (docsRes.ok) {
+        const json = await docsRes.json()
         setDocuments(
-          (docsData || []).map((d) => ({
+          (json.documents || []).map((d) => ({
             id: d.id,
             title: d.title,
             type: d.type || 'document',
             file_name: d.file_name,
-            storage_path: d.storage_path,
             url: d.url,
-            uploaded_at: d.created_at,
+            uploaded_at: d.uploaded_at,
           }))
         )
+      } else {
+        console.warn('Chatbot documents error:', docsRes.status)
+        setDocuments([])
       }
     } catch (err) {
       console.error('Error fetching Chatbot data:', err)
@@ -111,22 +106,17 @@ export default function ChatbotPage() {
     }
     setLoading(true)
     try {
-      const ext = file.name.split('.').pop() || 'bin'
-      const path = `${Date.now()}-${fileName.replace(/[^a-zA-Z0-9-_]/g, '_')}.${ext}`
-      const { error: uploadErr } = await supabaseChatbot.storage.from('chatbot-documents').upload(path, file, { upsert: false })
-      if (uploadErr) {
-        alert('❌ Upload failed: ' + uploadErr.message)
-        return
-      }
-      const { error: insertErr } = await supabaseChatbot.from('documents').insert({
-        title: fileName.trim(),
-        type: 'document',
-        file_name: file.name,
-        storage_path: path,
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('title', fileName.trim())
+
+      const res = await fetch(`${API_URL}/admin/upload`, {
+        method: 'POST',
+        body: formData,
       })
-      if (insertErr) {
-        await supabaseChatbot.storage.from('chatbot-documents').remove([path])
-        alert('❌ Upload failed: ' + insertErr.message)
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        alert('❌ Upload failed: ' + (err.detail || res.status))
         return
       }
       alert('✅ Document uploaded successfully')
@@ -148,13 +138,14 @@ export default function ChatbotPage() {
     }
     setLoading(true)
     try {
-      const { error } = await supabaseChatbot.from('documents').insert({
-        title: linkTitle.trim(),
-        type: 'link',
-        url: linkUrl.trim(),
+      const res = await fetch(`${API_URL}/admin/add-link`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: linkTitle.trim(), url: linkUrl.trim() }),
       })
-      if (error) {
-        alert('❌ Failed to add link: ' + error.message)
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        alert('❌ Failed to add link: ' + (err.detail || res.status))
         return
       }
       alert('✅ Link added successfully')
@@ -207,12 +198,10 @@ export default function ChatbotPage() {
   const deleteDocument = async (doc) => {
     if (!confirm('Delete this document?')) return
     try {
-      if (doc.storage_path) {
-        await supabaseChatbot.storage.from('chatbot-documents').remove([doc.storage_path])
-      }
-      const { error } = await supabaseChatbot.from('documents').delete().eq('id', doc.id)
-      if (error) {
-        alert('Delete failed: ' + error.message)
+      const res = await fetch(`${API_URL}/admin/documents/${doc.id}`, { method: 'DELETE' })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        alert('Delete failed: ' + (err.detail || res.status))
         return
       }
       alert('✅ Deleted')
@@ -354,9 +343,9 @@ export default function ChatbotPage() {
                               {doc.url}
                             </a>
                           )}
-                          {doc.type === 'document' && doc.storage_path && (
+                          {doc.type === 'document' && doc.file_name && (
                             <a
-                              href={supabaseChatbot.storage.from('chatbot-documents').getPublicUrl(doc.storage_path).data.publicUrl}
+                              href={`${API_URL}/uploads/${doc.file_name}`}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="text-sm text-accent-purpleLight hover:underline"

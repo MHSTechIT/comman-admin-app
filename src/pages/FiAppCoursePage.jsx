@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { supabaseFiApp } from '../lib/supabaseClientFiApp'
+import { fiAppApiUrl } from '../lib/supabaseClientFiApp'
 import { ArrowLeft, BookOpen } from 'lucide-react'
 
 export default function FiAppCoursePage() {
@@ -18,35 +18,21 @@ export default function FiAppCoursePage() {
   const fetchData = async () => {
     setLoading(true)
     try {
-      console.log('🔍 Fetching courses for user ID:', id)
+      const [profileRes, coursesRes] = await Promise.all([
+        fetch(`${fiAppApiUrl}/api/users/${encodeURIComponent(id)}/profile`),
+        fetch(`${fiAppApiUrl}/api/users/${encodeURIComponent(id)}/courses`),
+      ])
 
-      let userData = null
-      for (const [table, col] of [['profiles_public', 'user_id'], ['profiles', 'id']]) {
-        const { data: d, error } = await supabaseFiApp.from(table).select('name').eq(col, id).maybeSingle()
-        if (!error && d) {
-          userData = d
-          break
-        }
+      if (profileRes.ok) {
+        const json = await profileRes.json()
+        setUserName(json.name || 'User')
       }
-      if (userData) setUserName(userData.name || 'User')
 
-      // Fetch courses - try different possible table names
-      console.log('🔍 Fetching courses...')
-      const { data, error } = await supabaseFiApp
-        .from('user_courses')
-        .select('*')
-        .eq('user_id', id)
-        .order('created_at', { ascending: false })
-
-      if (error && error.message.includes('does not exist')) {
-        console.log('⚠️ Courses table not found, displaying empty state')
-        setCourses([])
-      } else if (error) {
-        console.error('❌ Courses error:', error)
-        throw error
+      if (coursesRes.ok) {
+        const json = await coursesRes.json()
+        setCourses(json.data || [])
       } else {
-        console.log('✅ Courses loaded:', data?.length || 0, 'courses')
-        setCourses(data || [])
+        setCourses([])
       }
     } catch (err) {
       console.error('Error fetching courses:', err)
@@ -113,7 +99,6 @@ export default function FiAppCoursePage() {
                     <span className="text-xs text-dark-muted">{course.progress}% done</span>
                   )}
                 </div>
-
                 {course.progress && (
                   <div className="mt-3 w-full bg-dark-bg rounded-full h-2">
                     <div

@@ -8,6 +8,7 @@ import logging
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from src.controller.admin_controller import router as admin_router
 from src.database import init_db
@@ -25,6 +26,9 @@ app = FastAPI(
     description="FastAPI backend for chatbot admin: documents, links, enrollment leads",
     version="1.0.0"
 )
+
+os.makedirs("uploads", exist_ok=True)
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 # CORS: allow localhost (dev) + Vercel/Render production URLs
 # Set CORS_ORIGINS=* to allow all, or comma-separated list for specific origins

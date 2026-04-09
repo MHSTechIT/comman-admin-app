@@ -12,19 +12,13 @@ services:
 
     envVars:
       - key: VITE_SUPABASE_URL
-        sync: false            # Set in Render Dashboard
+        sync: false
       - key: VITE_SUPABASE_SERVICE_KEY
         sync: false
-      - key: VITE_SUPABASE_FI_APP_URL
-        sync: false
-      - key: VITE_SUPABASE_FI_APP_ANON_KEY
-        sync: false
-      - key: VITE_SUPABASE_CHATBOT_URL
-        sync: false
-      - key: VITE_SUPABASE_CHATBOT_ANON_KEY
-        sync: false
       - key: VITE_CHATBOT_API_URL
-        sync: false            # Set to your chatbot-api Render URL after backend deploys
+        sync: false            # Set to your chatbot-api Render URL, e.g. https://chatbot-api-xxxx.onrender.com
+      - key: VITE_FI_APP_API_URL
+        sync: false            # Set to your fi-app-api Render URL, e.g. https://fi-app-api-xxxx.onrender.com
 
     routes:
       - type: rewrite
@@ -43,11 +37,24 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: "3.12.0"
-      - key: SUPABASE_URL
-        value: "https://mktzrhqaxxclisxckmed.supabase.co"
       - key: DB_CONNECTION
-        sync: false            # PostgreSQL connection string from Supabase
-      - key: SUPABASE_KEY
-        sync: false            # Supabase anon/service key
+        sync: false            # postgresql+psycopg://postgres:$erver2026@13.234.115.104:5432/QNA_BOT
+      - key: CORS_ORIGINS
+        value: "*"
+
+  # ── FI-App Backend API (Python / FastAPI) ───────────────────────────────────
+  - type: web
+    name: fi-app-api
+    runtime: python
+    region: oregon
+    rootDir: fi-app-backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.0"
+      - key: DB_CONNECTION
+        sync: false            # postgresql+psycopg://postgres:$erver2026@13.234.115.104:5432/AI_FI
       - key: CORS_ORIGINS
         value: "*"
