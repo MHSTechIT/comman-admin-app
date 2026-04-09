@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { Zap, X, RefreshCw, ExternalLink } from 'lucide-react'
 
-const GCP_METRICS_URL = '/api/gcp-metrics'
+const CHATBOT_API = import.meta.env.VITE_CHATBOT_API_URL || 'https://common-chatbot-api.onrender.com'
+const GCP_METRICS_URL = `${CHATBOT_API}/gcp-metrics`
 const GCP_BILLING = 'https://console.cloud.google.com/billing/linkedaccount?project=gen-lang-client-0040808089'
 
 let _cache = null
