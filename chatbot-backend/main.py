@@ -5,6 +5,8 @@ env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
 load_dotenv(env_path, override=True)
 
 import logging
+import asyncio
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -18,16 +20,28 @@ logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
 
 log.info(f"Loading .env from: {env_path}")
-try:
-    init_db()
-    log.info("Database initialized")
-except Exception as e:
-    log.warning(f"Database init failed (non-fatal): {e}")
+
+
+async def _init_db_async():
+    """Run init_db in a thread so it doesn't block the event loop startup."""
+    try:
+        await asyncio.to_thread(init_db)
+        log.info("Database initialized")
+    except Exception as e:
+        log.warning(f"Database init failed (non-fatal): {e}")
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    asyncio.create_task(_init_db_async())
+    yield
+
 
 app = FastAPI(
     title="Chatbot Admin API",
     description="FastAPI backend for chatbot admin: documents, links, enrollment leads",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan,
 )
 
 os.makedirs("uploads", exist_ok=True)
