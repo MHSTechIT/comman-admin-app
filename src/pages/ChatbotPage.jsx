@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import GcpCreditsWidget from '../components/GcpCreditsWidget'
 import ElevenLabsWidget from '../components/ElevenLabsWidget'
 
-const API_URL = import.meta.env.VITE_CHATBOT_API_URL || 'http://localhost:8003'
+const API_URL = (import.meta.env.VITE_CHATBOT_API_URL || 'http://localhost:8003').trim()
 
 const toLocalYmd = (d) => {
   if (!d) return ''

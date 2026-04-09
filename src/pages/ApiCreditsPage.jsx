@@ -3,7 +3,7 @@ import { ExternalLink, CheckCircle, XCircle, RefreshCw, Key, Cpu, Zap, BarChart2
 
 const GCP_PROJECT_ID = import.meta.env.VITE_GCP_PROJECT_ID || 'gen-lang-client-0040808089'
 const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta/models'
-const CHATBOT_API = import.meta.env.VITE_CHATBOT_API_URL || 'https://common-chatbot-api.onrender.com'
+const CHATBOT_API = (import.meta.env.VITE_CHATBOT_API_URL || 'https://common-chatbot-api.onrender.com').trim()
 
 const HIGHLIGHT_MODELS = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro']
 

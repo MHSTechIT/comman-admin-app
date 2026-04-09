@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { Mic, X, RefreshCw, ExternalLink } from 'lucide-react'
 
-const CHATBOT_API = import.meta.env.VITE_CHATBOT_API_URL || 'https://common-chatbot-api.onrender.com'
+const CHATBOT_API = (import.meta.env.VITE_CHATBOT_API_URL || 'https://common-chatbot-api.onrender.com').trim()
 const EL_DASHBOARD = 'https://elevenlabs.io/app/subscription'
 
 let _cache = null
