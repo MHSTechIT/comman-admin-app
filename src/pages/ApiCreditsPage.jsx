@@ -343,6 +343,125 @@ function ApiCard({ api }) {
   )
 }
 
+// ─── ElevenLabs Credits Card ──────────────────────────────────────────────────
+function ElevenLabsCard() {
+  const [data, setData] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  const fetchCredits = async () => {
+    setLoading(true)
+    setError('')
+    try {
+      const res = await fetch(`${CHATBOT_API}/elevenlabs-credits`)
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.detail || `HTTP ${res.status}`)
+      }
+      setData(await res.json())
+    } catch (e) {
+      setError(e.message || 'Failed to fetch')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => { fetchCredits() }, [])
+
+  const used = data?.character_count ?? null
+  const limit = data?.character_limit ?? null
+  const tier = data?.tier ?? ''
+  const pct = used != null && limit ? Math.min(100, (used / limit) * 100) : 0
+  const barColor = pct > 90 ? '#f87171' : pct > 66 ? '#fbbf24' : '#34d399'
+
+  return (
+    <div className="bg-dark-card border border-orange-500/30 rounded-xl overflow-hidden">
+      <div className="bg-gradient-to-r from-orange-900/40 to-transparent px-6 py-5 border-b border-dark-border">
+        <div className="flex items-start justify-between">
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <Zap className="w-5 h-5 text-orange-400" />
+              <h2 className="text-lg font-semibold text-white">ElevenLabs</h2>
+            </div>
+            <p className="text-sm text-dark-muted">Text-to-speech character usage</p>
+          </div>
+          <div className="flex items-center gap-2">
+            {loading && (
+              <span className="flex items-center gap-1.5 text-xs text-yellow-400 bg-yellow-400/10 px-2.5 py-1 rounded-full">
+                <RefreshCw className="w-3 h-3 animate-spin" /> Loading...
+              </span>
+            )}
+            {!loading && !error && (
+              <span className="flex items-center gap-1.5 text-xs text-green-400 bg-green-400/10 px-2.5 py-1 rounded-full">
+                <CheckCircle className="w-3 h-3" /> Active
+              </span>
+            )}
+            {error && (
+              <span className="flex items-center gap-1.5 text-xs text-red-400 bg-red-400/10 px-2.5 py-1 rounded-full">
+                <XCircle className="w-3 h-3" /> Error
+              </span>
+            )}
+            <button onClick={fetchCredits} disabled={loading}
+              className="p-1.5 rounded-lg text-dark-muted hover:text-white hover:bg-white/5 transition">
+              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="p-6 space-y-4">
+        {error && (
+          <div className="bg-red-500/10 border border-red-500/20 rounded-lg px-4 py-3 text-sm text-red-300">{error}</div>
+        )}
+
+        {data && !loading && (
+          <>
+            {tier && (
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-medium text-dark-muted uppercase tracking-wider">Plan</span>
+                <span className="text-xs px-2 py-0.5 rounded-full bg-orange-500/20 text-orange-300 capitalize">{tier}</span>
+              </div>
+            )}
+
+            {used != null && limit != null && (
+              <div>
+                <div className="flex justify-between text-xs mb-1.5">
+                  <span className="text-dark-muted">Characters used this month</span>
+                  <span className="text-white font-medium">{used.toLocaleString()} / {limit.toLocaleString()}</span>
+                </div>
+                <div className="w-full bg-white/10 rounded-full h-2">
+                  <div className="h-2 rounded-full transition-all duration-500"
+                    style={{ width: `${pct}%`, backgroundColor: barColor }} />
+                </div>
+                <p className="text-xs mt-1.5" style={{ color: barColor }}>
+                  {pct.toFixed(1)}% used · {(limit - used).toLocaleString()} remaining
+                </p>
+              </div>
+            )}
+
+            <div className="bg-white/5 border border-dark-border rounded-lg px-4 py-3 text-xs space-y-1.5">
+              {data.next_character_count_reset_unix && (
+                <div className="flex justify-between">
+                  <span className="text-dark-muted">Resets on</span>
+                  <span className="text-white">
+                    {new Date(data.next_character_count_reset_unix * 1000).toLocaleDateString()}
+                  </span>
+                </div>
+              )}
+              {data.voice_limit != null && (
+                <div className="flex justify-between">
+                  <span className="text-dark-muted">Voice slots</span>
+                  <span className="text-white">{data.voice_count ?? 0} / {data.voice_limit}</span>
+                </div>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 export default function ApiCreditsPage() {
   return (
@@ -366,9 +485,10 @@ export default function ApiCreditsPage() {
       {/* Real-time metrics from Cloud Monitoring */}
       <GcpMetricsPanel />
 
-      {/* Per-key status cards */}
+      {/* Per-key status cards + ElevenLabs */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {APIS.map(api => <ApiCard key={api.id} api={api} />)}
+        <ElevenLabsCard />
       </div>
     </div>
   )

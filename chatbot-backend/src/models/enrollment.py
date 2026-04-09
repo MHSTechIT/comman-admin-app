@@ -10,4 +10,6 @@ class Enrollment(Base):
     email = Column(String(255), nullable=True, index=True)
     phone = Column(String(20), nullable=False, index=True)
     sugar_level = Column(String(50), nullable=True)
+    age = Column(Integer, nullable=True)
+    location = Column(String(255), nullable=True)
     created_at = Column(DateTime, server_default=func.now(), nullable=False)

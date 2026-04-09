@@ -27,6 +27,8 @@ class EnrollmentRequest(BaseModel):
     name: str
     phone: str
     sugar_level: str = None
+    age: int = None
+    location: str = None
 
 
 @router.post("/upload")
@@ -135,7 +137,9 @@ async def submit_enrollment(request: EnrollmentRequest):
             db,
             name=request.name.strip(),
             phone=request.phone.strip(),
-            sugar_level=request.sugar_level.strip() if request.sugar_level else None
+            sugar_level=request.sugar_level.strip() if request.sugar_level else None,
+            age=request.age,
+            location=request.location.strip() if request.location else None,
         )
         return {
             "success": True,
@@ -163,6 +167,8 @@ async def get_enrollment_leads():
                 "name": e.name,
                 "phone": e.phone,
                 "sugar_level": e.sugar_level or "",
+                "age": e.age,
+                "location": e.location or "",
                 "created_at": e.created_at.isoformat() if hasattr(e.created_at, "isoformat") else str(e.created_at)
             }
             for e in enrollments

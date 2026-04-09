@@ -193,6 +193,23 @@ async def get_gcp_metrics():
     return results
 
 
+@app.get("/elevenlabs-credits")
+async def get_elevenlabs_credits():
+    """Fetch ElevenLabs subscription / character usage."""
+    import httpx
+    api_key = os.getenv("ELEVENLABS_API_KEY", "").strip()
+    if not api_key:
+        raise HTTPException(status_code=503, detail="ELEVENLABS_API_KEY not configured")
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        resp = await client.get(
+            "https://api.elevenlabs.io/v1/user/subscription",
+            headers={"xi-api-key": api_key},
+        )
+        if not resp.is_success:
+            raise HTTPException(status_code=resp.status_code, detail="ElevenLabs API error")
+        return resp.json()
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8003)

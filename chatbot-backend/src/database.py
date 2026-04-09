@@ -36,7 +36,19 @@ def get_db():
 
 
 def init_db():
-    if engine is not None:
-        Base.metadata.create_all(bind=engine)
-    else:
+    if engine is None:
         log.warning("Skipping init_db — no database engine")
+        return
+    from sqlalchemy import text
+    Base.metadata.create_all(bind=engine)
+    # Add columns that may be missing from older schema
+    with engine.connect() as conn:
+        for stmt in [
+            "ALTER TABLE enrollments ADD COLUMN IF NOT EXISTS age INTEGER",
+            "ALTER TABLE enrollments ADD COLUMN IF NOT EXISTS location VARCHAR(255)",
+        ]:
+            try:
+                conn.execute(text(stmt))
+            except Exception:
+                pass
+        conn.commit()

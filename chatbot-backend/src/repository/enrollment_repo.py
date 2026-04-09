@@ -7,12 +7,15 @@ logger = logging.getLogger(__name__)
 
 class EnrollmentRepository:
     @staticmethod
-    def create_enrollment(db: Session, name: str, phone: str, sugar_level: str = None) -> Enrollment:
+    def create_enrollment(db: Session, name: str, phone: str, sugar_level: str = None,
+                          age: int = None, location: str = None) -> Enrollment:
         try:
             enrollment = Enrollment(
                 name=name.strip(),
                 phone=phone.strip(),
-                sugar_level=sugar_level.strip() if sugar_level else None
+                sugar_level=sugar_level.strip() if sugar_level else None,
+                age=age,
+                location=location.strip() if location else None,
             )
             db.add(enrollment)
             db.commit()
