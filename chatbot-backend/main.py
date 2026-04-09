@@ -18,8 +18,11 @@ logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
 
 log.info(f"Loading .env from: {env_path}")
-init_db()
-log.info("Database initialized")
+try:
+    init_db()
+    log.info("Database initialized")
+except Exception as e:
+    log.warning(f"Database init failed (non-fatal): {e}")
 
 app = FastAPI(
     title="Chatbot Admin API",

@@ -51,6 +51,33 @@ def _try_tables(db: Session, attempts, build_query_fn):
     return []
 
 
+# ─── Debug: list tables ──────────────────────────────────────────────────────
+
+@router.get("/debug/tables")
+def list_tables(db: Session = Depends(get_db)):
+    """List all tables in the database and their columns."""
+    try:
+        rows = db.execute(text(
+            "SELECT table_name FROM information_schema.tables "
+            "WHERE table_schema = 'public' ORDER BY table_name"
+        )).fetchall()
+        tables = [r[0] for r in rows]
+        detail = {}
+        for t in tables:
+            try:
+                cols = db.execute(text(
+                    f"SELECT column_name, data_type FROM information_schema.columns "
+                    f"WHERE table_schema='public' AND table_name='{t}' ORDER BY ordinal_position"
+                )).fetchall()
+                cnt = db.execute(text(f"SELECT COUNT(*) FROM {t}")).scalar()
+                detail[t] = {"columns": [c[0] for c in cols], "row_count": cnt}
+            except Exception:
+                detail[t] = {"error": "could not inspect"}
+        return {"tables": tables, "detail": detail}
+    except Exception as e:
+        return {"error": str(e)}
+
+
 # ─── Users List ─────────────────────────────────────────────────────────────
 
 @router.get("/users")
